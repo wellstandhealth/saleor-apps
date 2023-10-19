@@ -7,6 +7,7 @@ import { saleorApp } from "../../../../saleor-app";
 import { createLogger } from "../../../lib/logger";
 import { WebhookResponse } from "../../../modules/app/webhook-response";
 import { getActiveConnectionService } from "../../../modules/taxes/get-active-connection-service";
+import { TaxIncompleteWebhookPayloadError } from "../../../modules/taxes/tax-error";
 
 export const config = {
   api: {
@@ -14,15 +15,18 @@ export const config = {
   },
 };
 
-type CalculateTaxesPayload = Extract<CalculateTaxesEventFragment, { __typename: "CalculateTaxes" }>;
+export type CalculateTaxesPayload = Extract<
+  CalculateTaxesEventFragment,
+  { __typename: "CalculateTaxes" }
+>;
 
 function verifyCalculateTaxesPayload(payload: CalculateTaxesPayload) {
-  if (!payload.taxBase.lines) {
-    throw new Error("No lines found in taxBase");
+  if (!payload.taxBase.lines.length) {
+    throw new TaxIncompleteWebhookPayloadError("No lines found in taxBase");
   }
 
   if (!payload.taxBase.address) {
-    throw new Error("No address found in taxBase");
+    throw new TaxIncompleteWebhookPayloadError("No address found in taxBase");
   }
 
   return payload;
@@ -45,23 +49,18 @@ export default checkoutCalculateTaxesSyncWebhook.createHandler(async (req, res, 
 
   try {
     verifyCalculateTaxesPayload(payload);
-    logger.debug("Payload validated succesfully");
-  } catch (error) {
-    logger.debug("Payload validation failed");
-    return webhookResponse.error(error);
-  }
+    logger.debug("Payload validated Successfully");
 
-  try {
     const appMetadata = payload.recipient?.privateMetadata ?? [];
     const channelSlug = payload.taxBase.channel.slug;
     const activeConnectionService = getActiveConnectionService(
       channelSlug,
       appMetadata,
-      ctx.authData
+      ctx.authData,
     );
 
     logger.info("Found active connection service. Calculating taxes...");
-    const calculatedTaxes = await activeConnectionService.calculateTaxes(payload.taxBase);
+    const calculatedTaxes = await activeConnectionService.calculateTaxes(payload);
 
     logger.info({ calculatedTaxes }, "Taxes calculated");
     return webhookResponse.success(ctx.buildResponse(calculatedTaxes));

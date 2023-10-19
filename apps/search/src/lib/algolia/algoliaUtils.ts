@@ -1,8 +1,12 @@
+import { EditorJsPlaintextRenderer } from "@saleor/apps-shared";
 import {
   ProductAttributesDataFragment,
   ProductVariantWebhookPayloadFragment,
 } from "../../../generated/graphql";
 import { isNotNil } from "../isNotNil";
+import { safeParseJson } from "../safe-parse-json";
+import { metadataToAlgoliaAttribute } from "./metadata-to-algolia-attribute";
+import { AlgoliaRootFields, AlgoliaRootFieldsKeys } from "../algolia-fields";
 
 type PartialChannelListing = {
   channel: {
@@ -13,7 +17,7 @@ type PartialChannelListing = {
 
 export function channelListingToAlgoliaIndexId(
   channelListing: PartialChannelListing,
-  indexNamePrefix: string | undefined
+  indexNamePrefix: string | undefined,
 ) {
   /**
    * Index name should not start with . (dot)
@@ -58,10 +62,6 @@ export function categoryHierarchicalFacets({ product }: ProductVariantWebhookPay
   return categoryLvlMapping;
 }
 
-export function formatMetadata({ product }: ProductVariantWebhookPayloadFragment) {
-  return Object.fromEntries(product.metadata?.map(({ key, value }) => [key, value]) || []);
-}
-
 export type AlgoliaObject = ReturnType<typeof productAndVariantToAlgolia>;
 
 /**
@@ -83,9 +83,11 @@ const mapSelectedAttributesToRecord = (attr: ProductAttributesDataFragment) => {
 export function productAndVariantToAlgolia({
   variant,
   channel,
+  enabledKeys,
 }: {
   variant: ProductVariantWebhookPayloadFragment;
   channel: string;
+  enabledKeys: string[];
 }) {
   const product = variant.product;
   const attributes = {
@@ -115,6 +117,10 @@ export function productAndVariantToAlgolia({
 
   const listing = variant.channelListings?.find((l) => l.channel.slug === channel);
 
+  const inStock = !!variant.quantityAvailable;
+
+  const media = variant.product.media?.map((m) => ({ url: m.url, type: m.type })) || [];
+
   const document = {
     objectID: productAndVariantToObjectID(variant),
     productId: product.id,
@@ -123,14 +129,46 @@ export function productAndVariantToAlgolia({
     productName: product.name,
     variantName: variant.name,
     attributes,
-    description: product.description,
+    media,
+    description: safeParseJson(product.description),
+    descriptionPlaintext: EditorJsPlaintextRenderer({ stringData: product.description }),
     slug: product.slug,
     thumbnail: product.thumbnail?.url,
+    /**
+     * Deprecated
+     */
     grossPrice: listing?.price?.amount,
+    pricing: {
+      price: {
+        net: variant.pricing?.price?.net.amount,
+        gross: variant.pricing?.price?.gross.amount,
+      },
+      onSale: variant.pricing?.onSale,
+      discount: {
+        net: variant.pricing?.discount?.net.amount,
+        gross: variant.pricing?.discount?.gross.amount,
+      },
+      priceUndiscounted: {
+        net: variant.pricing?.priceUndiscounted?.net.amount,
+        gross: variant.pricing?.priceUndiscounted?.gross.amount,
+      },
+    },
+    inStock,
     categories: categoryHierarchicalFacets(variant),
     collections: product.collections?.map((collection) => collection.name) || [],
-    metadata: formatMetadata(variant),
-  };
+    metadata: metadataToAlgoliaAttribute(variant.product.metadata),
+    variantMetadata: metadataToAlgoliaAttribute(variant.metadata),
+    otherVariants: variant.product.variants?.map((v) => v.id).filter((v) => v !== variant.id) || [],
+  } satisfies Record<AlgoliaRootFields | string, unknown>;
+
+  // todo refactor
+  AlgoliaRootFieldsKeys.forEach((field) => {
+    const enabled = enabledKeys.includes(field);
+
+    if (!enabled) {
+      delete document[field];
+    }
+  });
 
   return document;
 }

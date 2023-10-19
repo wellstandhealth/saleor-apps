@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextApiResponse } from "next";
 
+import { CriticalError, ExpectedError } from "../../error";
 import { createLogger, Logger } from "../../lib/logger";
 
 export class WebhookResponse {
@@ -8,29 +10,29 @@ export class WebhookResponse {
     this.logger = createLogger({ event: "WebhookResponse" });
   }
 
-  private returnSuccess(data?: unknown) {
-    this.logger.debug({ data }, "Responding to Saleor with data:");
-    return this.res.status(200).json(data ?? {});
-  }
-
-  private returnError(errorMessage: string) {
-    this.logger.debug({ errorMessage }, "Responding to Saleor with error:");
+  private respondWithError(errorMessage: string) {
     return this.res.status(500).json({ error: errorMessage });
   }
 
-  private resolveError(error: unknown) {
-    if (error instanceof Error) {
-      this.logger.error(error.stack, "Unexpected error caught:");
-      return this.returnError(error.message);
-    }
-    return this.returnError("Internal server error");
-  }
-
   error(error: unknown) {
-    return this.resolveError(error);
+    if (error instanceof CriticalError) {
+      Sentry.captureException(error);
+      this.logger.error({ error }, "CriticalError occurred");
+      return this.respondWithError(error.message);
+    }
+
+    if (error instanceof ExpectedError) {
+      this.logger.warn({ error }, "ExpectedError occurred");
+      return this.respondWithError(error.message);
+    }
+
+    Sentry.captureMessage("Unhandled error occurred");
+    Sentry.captureException(error);
+    this.logger.error({ error }, "Unhandled error occurred");
+    return this.respondWithError("Unhandled error occurred");
   }
 
   success(data?: unknown) {
-    return this.returnSuccess(data);
+    return this.res.status(200).json(data ?? {});
   }
 }

@@ -1,47 +1,92 @@
 import { describe, expect, it } from "vitest";
-import { AppConfig } from "./app-config";
+import { AppConfig, RootConfig } from "./app-config";
+
+const exampleChannelConfig: RootConfig["channelConfig"] = {
+  test: {
+    storefrontUrls: {
+      productStorefrontUrl: "https://example.com",
+      storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
+    },
+  },
+};
+
+const exampleS3Config: RootConfig["s3"] = {
+  accessKeyId: "example-access-key",
+  bucketName: "example-bucket-name",
+  region: "eu-west-1",
+  secretAccessKey: "example-secret-key",
+};
+
+const exampleAttributeMappingConfig: RootConfig["attributeMapping"] = {
+  brandAttributeIds: ["brand-attribute-1"],
+  colorAttributeIds: [],
+  patternAttributeIds: [],
+  materialAttributeIds: [],
+  sizeAttributeIds: [],
+};
+
+const exampleTitleTemplate: RootConfig["titleTemplate"] =
+  "Example {{ variant.product.name }} - {{ variant.name }}";
+
+const exampleImageSize: RootConfig["imageSize"] = 1024;
+
+const exampleConfiguration: RootConfig = {
+  channelConfig: exampleChannelConfig,
+  s3: exampleS3Config,
+  attributeMapping: exampleAttributeMappingConfig,
+  titleTemplate: exampleTitleTemplate,
+  imageSize: exampleImageSize,
+};
 
 describe("AppConfig", function () {
   describe("Construction", () => {
-    it("Constructs empty state", () => {
+    it("Constructs configuration with default values, when empty object is passed as initial data", () => {
       const instance = new AppConfig();
 
-      expect(instance.getRootConfig()).toEqual({ channelConfig: {}, s3: null });
+      expect(instance.getRootConfig()).toEqual({
+        channelConfig: {},
+        s3: null,
+        attributeMapping: {
+          brandAttributeIds: [],
+          colorAttributeIds: [],
+          patternAttributeIds: [],
+          materialAttributeIds: [],
+          sizeAttributeIds: [],
+        },
+        titleTemplate: "{{variant.product.name}} - {{variant.name}}",
+        imageSize: 1024,
+      });
     });
 
-    it("Constructs from initial state", () => {
-      const instance = new AppConfig({
-        s3: {
-          region: "region",
-          bucketName: "bucket",
-          accessKeyId: "access",
-          secretAccessKey: "secret",
-        },
-        channelConfig: {
-          test: {
-            storefrontUrls: {
-              productStorefrontUrl: "https://example.com",
-              storefrontUrl: "https://example.com/p/{productFeed}",
-            },
-          },
-        },
-      });
+    it("Constructs configuration, when valid initial state is passed", () => {
+      const instance = new AppConfig(exampleConfiguration);
+
+      expect(instance.getRootConfig()).toEqual(exampleConfiguration);
+    });
+
+    it("Fill attribute mapping, image size and title template with default values, when initial data are lacking those fields", () => {
+      const configurationWithoutMapping = structuredClone(exampleConfiguration);
+
+      // @ts-expect-error: Simulating data before the migration
+      delete configurationWithoutMapping.attributeMapping;
+      // @ts-expect-error
+      delete configurationWithoutMapping.titleTemplate;
+      // @ts-expect-error
+      delete configurationWithoutMapping.imageSize;
+
+      const instance = new AppConfig(configurationWithoutMapping as any); // Casting used to prevent TS from reporting an error
 
       expect(instance.getRootConfig()).toEqual({
-        s3: {
-          bucketName: "bucket",
-          secretAccessKey: "secret",
-          accessKeyId: "access",
-          region: "region",
+        ...exampleConfiguration,
+        attributeMapping: {
+          brandAttributeIds: [],
+          colorAttributeIds: [],
+          patternAttributeIds: [],
+          materialAttributeIds: [],
+          sizeAttributeIds: [],
         },
-        channelConfig: {
-          test: {
-            storefrontUrls: {
-              productStorefrontUrl: "https://example.com",
-              storefrontUrl: "https://example.com/p/{productFeed}",
-            },
-          },
-        },
+        titleTemplate: "{{variant.product.name}} - {{variant.name}}",
+        imageSize: 1024,
       });
     });
 
@@ -51,7 +96,7 @@ describe("AppConfig", function () {
           new AppConfig({
             // @ts-expect-error
             foo: "bar",
-          })
+          }),
       ).toThrow();
     });
 
@@ -64,6 +109,15 @@ describe("AppConfig", function () {
           secretAccessKey: "secret",
         },
         channelConfig: {},
+        attributeMapping: {
+          brandAttributeIds: [],
+          colorAttributeIds: [],
+          patternAttributeIds: [],
+          materialAttributeIds: [],
+          sizeAttributeIds: [],
+        },
+        titleTemplate: "{{ variant.name }}",
+        imageSize: 1024,
       });
 
       const serialized = instance1.serialize();
@@ -78,6 +132,15 @@ describe("AppConfig", function () {
           secretAccessKey: "secret",
         },
         channelConfig: {},
+        attributeMapping: {
+          brandAttributeIds: [],
+          colorAttributeIds: [],
+          patternAttributeIds: [],
+          materialAttributeIds: [],
+          sizeAttributeIds: [],
+        },
+        titleTemplate: "{{ variant.name }}",
+        imageSize: 1024,
       });
     });
   });
@@ -94,10 +157,19 @@ describe("AppConfig", function () {
         test: {
           storefrontUrls: {
             productStorefrontUrl: "https://example.com",
-            storefrontUrl: "https://example.com/p/{productFeed}",
+            storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
           },
         },
       },
+      attributeMapping: {
+        brandAttributeIds: [],
+        colorAttributeIds: [],
+        patternAttributeIds: [],
+        materialAttributeIds: [],
+        sizeAttributeIds: ["size-id"],
+      },
+      titleTemplate: "{{ variant.product.name }} - {{ variant.name }}",
+      imageSize: 1024,
     });
 
     it("getRootConfig returns root config data", () => {
@@ -112,17 +184,26 @@ describe("AppConfig", function () {
           test: {
             storefrontUrls: {
               productStorefrontUrl: "https://example.com",
-              storefrontUrl: "https://example.com/p/{productFeed}",
+              storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
             },
           },
         },
+        attributeMapping: {
+          brandAttributeIds: [],
+          colorAttributeIds: [],
+          patternAttributeIds: [],
+          materialAttributeIds: [],
+          sizeAttributeIds: ["size-id"],
+        },
+        titleTemplate: "{{ variant.product.name }} - {{ variant.name }}",
+        imageSize: 1024,
       });
     });
 
-    it("getUrlsForChannel gets data for given channel or undefined if doesnt exist", () => {
+    it("getUrlsForChannel gets data for given channel or undefined if doesn't exist", () => {
       expect(instance.getUrlsForChannel("test")).toEqual({
         productStorefrontUrl: "https://example.com",
-        storefrontUrl: "https://example.com/p/{productFeed}",
+        storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
       });
 
       expect(instance.getUrlsForChannel("not-existing")).toBeUndefined();
@@ -134,6 +215,16 @@ describe("AppConfig", function () {
         bucketName: "bucket",
         accessKeyId: "access",
         secretAccessKey: "secret",
+      });
+    });
+
+    it("getAttributeMapping gets attribute data", () => {
+      expect(instance.getAttributeMapping()).toEqual({
+        brandAttributeIds: [],
+        colorAttributeIds: [],
+        patternAttributeIds: [],
+        materialAttributeIds: [],
+        sizeAttributeIds: ["size-id"],
       });
     });
   });
@@ -157,7 +248,7 @@ describe("AppConfig", function () {
       });
 
       // @ts-expect-error
-      expect(() => instance.setS3({ foo: "bar" })).toThrow();
+      expect(() => instance.setS3({ foo: "bar" })).toThrowError();
     });
 
     it("setChannelUrls sets valid config to channelConfig[channelSlug] and rejects invalid config", () => {
@@ -165,16 +256,16 @@ describe("AppConfig", function () {
 
       instance.setChannelUrls("test", {
         productStorefrontUrl: "https://example.com",
-        storefrontUrl: "https://example.com/p/{productFeed}",
+        storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
       });
 
       expect(instance.getUrlsForChannel("test")).toEqual({
         productStorefrontUrl: "https://example.com",
-        storefrontUrl: "https://example.com/p/{productFeed}",
+        storefrontUrl: "https://example.com/p/{{ variant.product.slug }}",
       });
 
       // @ts-expect-error
-      expect(() => instance.setChannelUrls("channel", "foo")).toThrow();
+      expect(() => instance.setChannelUrls("channel", "foo")).toThrowError();
     });
   });
 

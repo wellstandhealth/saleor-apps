@@ -1,4 +1,7 @@
 fragment ProductData on Product {
+  variants {
+    id
+  }
   id
   name
   description
@@ -20,6 +23,10 @@ fragment ProductData on Product {
   }
   thumbnail {
     url
+  }
+  media{
+    url
+    type
   }
   attributes {
     ...ProductAttributesData
