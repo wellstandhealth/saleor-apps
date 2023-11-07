@@ -30,7 +30,7 @@
     "@urql/exchange-auth": "^2.1.4",
     "@vitejs/plugin-react": "4.0.4",
     "dotenv": "^16.3.1",
-    "graphql": "16.7.1",
+    "graphql": "16.8.1",
     "graphql-tag": "^2.12.6",
     "handlebars": "^4.7.7",
     "html-to-text": "^9.0.3",
