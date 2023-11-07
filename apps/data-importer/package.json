@@ -22,7 +22,7 @@
     "@urql/exchange-auth": "^2.1.4",
     "@vitejs/plugin-react": "4.0.4",
     "dot-object": "^2.1.4",
-    "graphql": "16.7.1",
+    "graphql": "16.8.1",
     "graphql-tag": "^2.12.6",
     "jose": "^4.11.2",
     "jsdom": "^20.0.3",
